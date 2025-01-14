@@ -19,7 +19,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
     ],
     targets: [
-        .executableTarget(
+        .target(
             name: "App",
             dependencies: [
                 .product(name: "Vapor", package: "vapor"),
@@ -29,16 +29,23 @@ let package = Package(
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
             ],
-            swiftSettings: swiftSettings
+            swiftSettings: [
+                .unsafeFlags(["-cross-module-optimization"], .when(configuration: .release))
+            ]
+        ),
+        .executableTarget(
+            name: "Run",
+            dependencies: [
+                .target(name: "App"),
+            ]
         ),
         .testTarget(
             name: "AppTests",
             dependencies: [
                 .target(name: "App"),
-                .product(name: "VaporTesting", package: "vapor"),
-            ],
-            swiftSettings: swiftSettings
-        )
+                .product(name: "XCTVapor", package: "vapor"),
+            ]
+        ),
     ],
     swiftLanguageModes: [.v5]
 )
@@ -46,5 +53,4 @@ let package = Package(
 var swiftSettings: [SwiftSetting] { [
     .enableUpcomingFeature("DisableOutwardActorInference"),
     .enableExperimentalFeature("StrictConcurrency"),
-    .unsafeFlags(["-cross-module-optimization"], .when(configuration: .release))
 ] }
