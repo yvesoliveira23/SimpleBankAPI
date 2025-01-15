@@ -23,7 +23,7 @@ SimpleBankAPI is a server-side Swift web application built using the Vapor frame
 
 1. Clone the repository:
     ```bash
-    git clone https://github.com/yourusername/SimpleBankAPI.git
+    git clone https://github.com/yvesoliveira23/SimpleBankAPI
     cd SimpleBankAPI
     ```
 
