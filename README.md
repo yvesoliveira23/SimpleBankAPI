@@ -22,17 +22,20 @@ SimpleBankAPI is a server-side Swift web application built using the Vapor frame
 ### Steps
 
 1. Clone the repository:
+
     ```bash
     git clone https://github.com/yvesoliveira23/SimpleBankAPI
     cd SimpleBankAPI
     ```
 
 2. Install dependencies:
+
     ```bash
     swift package update
     ```
 
 3. Set up the database:
+
     ```bash
     psql -c 'CREATE DATABASE simplebankapi;'
     ```
@@ -42,11 +45,13 @@ SimpleBankAPI is a server-side Swift web application built using the Vapor frame
 ### Running the Application
 
 1. Build the project:
+
     ```bash
     swift build
     ```
 
 2. Run the project:
+
     ```bash
     swift run
     ```
@@ -76,6 +81,7 @@ ENABLE_LEAF=true
 ## Testing
 
 Run the test suite using:
+
 ```bash
 swift test
 ```
