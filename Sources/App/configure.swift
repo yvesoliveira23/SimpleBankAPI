@@ -4,25 +4,57 @@ import FluentPostgresDriver
 import Leaf
 import Vapor
 
-// configures your application
+public struct AppConfiguration {
+    /// Database configuration
+    struct Database {
+        static let port = Environment.get("DATABASE_PORT").flatMap(Int.init) ?? SQLPostgresConfiguration.ianaPortNumber
+        static let username = Environment.get("DATABASE_USERNAME") ?? "vapor_username"
+        static let password = Environment.get("DATABASE_PASSWORD") ?? ""
+    }
+    
+    /// Feature flags
+    struct Features {
+        static let enableLeaf = Environment.get("ENABLE_LEAF") == "true"
+    }
+}
+
+/// Configures the application with the given settings
+/// - Parameter app: The application instance to configure
+/// - Throws: An error if configuration fails
 public func configure(_ app: Application) async throws {
-    // Uncomment the line below to serve files from the /Public folder.
-    // This is useful for serving static files like images, CSS, and JavaScript.
-    // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
-    app.databases.use(DatabaseConfigurationFactory.postgres(configuration: .init(
-        port: Environment.get("DATABASE_PORT").flatMap { Int($0) } ?? SQLPostgresConfiguration.ianaPortNumber,
-        username: Environment.get("DATABASE_USERNAME") ?? "vapor_username",
-        password: Environment.get("DATABASE_PASSWORD") ?? "",
-        database: Environment.get("DATABASE_NAME") ?? "vapor_database"
-    ), as: .psql))
+    // Configure database
+    try configureDatabse(app)
+    
+    // Configure view engine
+    configureViewEngine(app)
+    
+    // Configure routes
+    try configureRoutes(app)
+}
 
-    app.migrations.add(CreateUser())
-    app.migrations.add(CreateTransaction())
+// MARK: - Private Configuration Methods
 
-    // Configure Leaf
-    if let useLeaf = Environment.get("USE_LEAF"), useLeaf == "true" {
+private func configureDatabase(_ app: Application) throws {
+    app.databases.use(DatabaseConfigurationFactory.postgres(
+        configuration: .init(
+            port: AppConfiguration.Database.port,
+            username: AppConfiguration.Database.username,
+            password: AppConfiguration.Database.password
+        )
+    ), as: .psql)
+}
+
+private func configureViewEngine(_ app: Application) {
+    if AppConfiguration.Features.enableLeaf {
         app.views.use(.leaf)
     }
-    // Configure the application's routes by registering all route handlers
-    try routes(app)
+}
+
+private func configureRoutes(_ app: Application) throws {
+    do {
+        try routes(app)
+    } catch {
+        app.logger.report(error: error)
+        throw error
+    }
 }

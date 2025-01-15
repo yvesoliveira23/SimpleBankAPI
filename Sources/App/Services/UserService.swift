@@ -1,81 +1,119 @@
 import Vapor
 import Crypto
 
+/// Service responsible for user-related operations
 struct UserService {
-    enum BalanceError: Error {
+    // MARK: - Types
+    
+    /// Errors that can occur during balance operations
+    enum BalanceError: LocalizedError {
         case negativeBalance
+        
+        var errorDescription: String? {
+            switch self {
+            case .negativeBalance:
+                return "Cannot set negative balance"
+            }
+        }
     }
-
-    // Decrypts the given CPF using AES256
+    
+    // MARK: - Encryption Operations
+    
+    /// Decrypts the given CPF using AES256
+    /// - Parameter encryptedCpf: The encrypted CPF string
+    /// - Returns: The decrypted CPF string
     func decryptCpf(_ encryptedCpf: String) -> String {
         do {
             return try AES256.decrypt(encryptedCpf)
         } catch let error as AES256.Error {
-            print("Decryption error for CPF \(encryptedCpf): \(error.localizedDescription)")
+            logger.error("Decryption error: \(error.localizedDescription)")
             return ""
         } catch let error as CryptoKitError {
-            print("CryptoKit error during decryption: \(error.localizedDescription)")
+            logger.error("CryptoKit error: \(error.localizedDescription)")
             return ""
         } catch {
-            print("Unexpected error during decryption: \(error.localizedDescription)")
+            logger.error("Unexpected error: \(error.localizedDescription)")
             return ""
         }
     }
-
-    // Encrypts the given CPF using AES256
+    
+    /// Encrypts the given CPF using AES256
+    /// - Parameter cpf: The CPF string to encrypt
+    /// - Throws: Encryption related errors
+    /// - Returns: The encrypted CPF string
     func encryptCpf(_ cpf: String) throws -> String {
         do {
             return try AES256.encrypt(cpf)
-        } catch let error as AES256.Error {
-            print("Encryption error for CPF \(cpf): \(error.localizedDescription)")
+        } catch {
+            logger.error("Encryption error: \(error.localizedDescription)")
             var attempts = 0
             let maxAttempts = 3
+            
             while attempts < maxAttempts {
                 do {
                     return try AES256.encrypt(cpf)
                 } catch {
                     attempts += 1
                     if attempts == maxAttempts {
-                        print("Failed to encrypt CPF after \(maxAttempts) attempts: \(error.localizedDescription)")
+                        logger.critical("Failed to encrypt after \(maxAttempts) attempts")
                         throw error
                     }
                 }
             }
-        } catch {
-            print("Unexpected error during encryption: \(error.localizedDescription)")
+            
             throw error
         }
-        print("Failed to encrypt CPF: \(error.localizedDescription)")
-        throw error
     }
-
-    // Hashes the given password using Bcrypt
+    
+    // MARK: - Password Operations
+    
+    /// Hashes the given password using Bcrypt
+    /// - Parameter password: The password to hash
+    /// - Throws: Hashing related errors
+    /// - Returns: The hashed password
     func setPassword(_ password: String) throws -> String {
-        return try Bcrypt.hash(password)
+        try Bcrypt.hash(password)
     }
-
-    // Verifies the given password against the stored hash
+    
+    /// Verifies the given password against a hash
+    /// - Parameters:
+    ///   - password: The password to verify
+    ///   - hash: The hash to verify against
+    /// - Throws: Verification related errors
+    /// - Returns: Whether the password matches the hash
     func verifyPassword(_ password: String, hash: String) throws -> Bool {
-        return try Bcrypt.verify(password, created: hash)
+        try Bcrypt.verify(password, created: hash)
     }
-
-    // Sets the user's balance, ensuring it is not negative
+    
+    // MARK: - User Operations
+    
+    /// Sets the user's balance
+    /// - Parameter newBalance: The new balance to set
+    /// - Throws: BalanceError if balance is negative
+    /// - Returns: The new balance
     func setBalance(_ newBalance: Double) throws -> Double {
-        if newBalance < 0 {
-            print("Attempted to set a negative balance")
+        guard newBalance >= 0 else {
+            logger.warning("Attempted to set negative balance: \(newBalance)")
             throw BalanceError.negativeBalance
         }
         return newBalance
     }
-
-    // Sets the user's merchant status
+    
+    /// Updates the user's merchant status
+    /// - Parameters:
+    ///   - isMerchant: The new merchant status
+    ///   - user: The user to update
+    /// - Returns: The updated user
     func setIsMerchant(_ isMerchant: Bool, user: UserModel) -> UserModel {
         user.isMerchant = isMerchant
         return user
     }
+}
 
-    // Updates the user's merchant status
-    func updateIsMerchant(_ isMerchant: Bool, user: UserModel) {
-        user.isMerchant = isMerchant
+// MARK: - Private Properties
+
+private extension UserService {
+    var logger: Logger {
+        Logger(label: "com.simplebank.userservice")
     }
 }
