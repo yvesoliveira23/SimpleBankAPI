@@ -1,10 +1,20 @@
-// swift-tools-version:6.0
+// swift-tools-version:5.3
 import PackageDescription
 
 let package = Package(
     name: "SimpleBankAPI",
     platforms: [
-       .macOS(.v13)
+        .macOS(.v10_15)
+    ],
+    products: [
+        .executable(
+            name: "Run",
+            targets: ["Run"]
+        ),
+        .library(
+            name: "App",
+            targets: ["App"]
+        )
     ],
     dependencies: [
         // 💧 A server-side Swift web framework.
@@ -15,8 +25,10 @@ let package = Package(
         .package(url: "https://github.com/vapor/fluent-postgres-driver.git", from: "2.8.0"),
         // 🍃 An expressive, performant, and extensible templating language built for Swift.
         .package(url: "https://github.com/vapor/leaf.git", from: "4.3.0"),
-        // 🔵 Non-blocking, event-driven networking for Swift. Used for custom executors
+        // 🔵 Non-blocking, event-driven networking for Swift. Used for custom executors.
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
+        // 🔒 A Swift library for cryptographic operations.
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "1.0.0")
     ],
     targets: [
         .target(
@@ -26,31 +38,17 @@ let package = Package(
                 .product(name: "Fluent", package: "fluent"),
                 .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
                 .product(name: "Leaf", package: "leaf"),
-                .product(name: "NIOCore", package: "swift-nio"),
-                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIO", package: "swift-nio"),
+                .product(name: "Crypto", package: "swift-crypto")
             ],
             swiftSettings: [
                 .unsafeFlags(["-cross-module-optimization"], .when(configuration: .release))
             ]
         ),
-        .executableTarget(
-            name: "Run",
-            dependencies: [
-                .target(name: "App"),
-            ]
-        ),
-        .testTarget(
-            name: "AppTests",
-            dependencies: [
-                .target(name: "App"),
-                .product(name: "XCTVapor", package: "vapor"),
-            ]
-        ),
-    ],
-    swiftLanguageModes: [.v5]
+        .target(name: "Run", dependencies: [.target(name: "App")]),
+        .testTarget(name: "AppTests", dependencies: [
+            .target(name: "App"),
+            .product(name: "XCTVapor", package: "vapor"),
+        ])
+    ]
 )
-
-var swiftSettings: [SwiftSetting] { [
-    .enableUpcomingFeature("DisableOutwardActorInference"),
-    .enableExperimentalFeature("StrictConcurrency"),
-] }

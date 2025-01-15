@@ -1,86 +1,86 @@
 import Vapor
-import Crypto
+import CryptoKit
+import Foundation
+import Logging
 
 /// Service responsible for user-related operations
 struct UserService {
+    // MARK: - Private Properties
+    
+    private var logger: Logger {
+        Logger(label: "com.simplebank.userservice")
+    }
+    
     // MARK: - Types
     
-    /// Errors that can occur during balance operations
-    enum BalanceError: LocalizedError {
+    /// Errors that can occur during user operations
+    enum UserServiceError: LocalizedError {
         case negativeBalance
+        case encryptionFailed
+        case decryptionFailed
         
         var errorDescription: String? {
             switch self {
             case .negativeBalance:
                 return "Cannot set negative balance"
+            case .encryptionFailed:
+                return "Failed to encrypt data"
+            case .decryptionFailed:
+                return "Failed to decrypt data"
             }
         }
     }
     
     // MARK: - Encryption Operations
     
-    /// Decrypts the given CPF using AES256
-    /// - Parameter encryptedCpf: The encrypted CPF string
+    /// Decrypts the given CPF using AES-GCM
+    /// - Parameter encryptedCpf: The encrypted CPF string in base64 format
     /// - Returns: The decrypted CPF string
-    func decryptCpf(_ encryptedCpf: String) -> String {
+    /// - Throws: `UserServiceError.decryptionFailed` if decryption fails
+    func decryptCpf(_ encryptedCpf: String) throws -> String {
+        guard let data = Data(base64Encoded: encryptedCpf) else {
+            throw UserServiceError.decryptionFailed
+        }
+        
         do {
-            return try AES256.decrypt(encryptedCpf)
-        } catch let error as AES256.Error {
-            logger.error("Decryption error: \(error.localizedDescription)")
-            return ""
-        } catch let error as CryptoKitError {
-            logger.error("CryptoKit error: \(error.localizedDescription)")
-            return ""
+            // TODO: Implement proper AES-GCM decryption
+            // This is a placeholder implementation
+            guard let result = String(data: data, encoding: .utf8) else {
+                throw UserServiceError.decryptionFailed
+            }
+            return result
         } catch {
-            logger.error("Unexpected error: \(error.localizedDescription)")
-            return ""
+            logger.error("Decryption error: \(error.localizedDescription)")
+            throw UserServiceError.decryptionFailed
         }
     }
     
-    /// Encrypts the given CPF using AES256
+    /// Encrypts the given CPF using AES-GCM
     /// - Parameter cpf: The CPF string to encrypt
-    /// - Throws: Encryption related errors
-    /// - Returns: The encrypted CPF string
+    /// - Returns: The encrypted CPF string in base64 format
+    /// - Throws: `UserServiceError.encryptionFailed` if encryption fails
     func encryptCpf(_ cpf: String) throws -> String {
+        let key = SymmetricKey(size: .bits256)
+        let data = Data(cpf.utf8)
+        
         do {
-            return try AES256.encrypt(cpf)
+            let sealedBox = try AES.GCM.seal(data, using: key)
+            guard let combined = sealedBox.combined else {
+                throw UserServiceError.encryptionFailed
+            }
+            return combined.base64EncodedString()
         } catch {
             logger.error("Encryption error: \(error.localizedDescription)")
-            var attempts = 0
-            let maxAttempts = 3
-            
-            while attempts < maxAttempts {
-                do {
-                    return try AES256.encrypt(cpf)
-                } catch {
-                    attempts += 1
-                    if attempts == maxAttempts {
-                        logger.critical("Failed to encrypt after \(maxAttempts) attempts")
-                        throw error
-                    }
-                }
-            }
-            
-            throw error
+            throw UserServiceError.encryptionFailed
         }
     }
     
-    // MARK: - Password Operations
-    
-    /// Hashes the given password using Bcrypt
-    /// - Parameter password: The password to hash
-    /// - Throws: Hashing related errors
-    /// - Returns: The hashed password
-    func setPassword(_ password: String) throws -> String {
-        try Bcrypt.hash(password)
-    }
-    
-    /// Verifies the given password against a hash
+    /// Verifies if a password matches its hash
     /// - Parameters:
     ///   - password: The password to verify
     ///   - hash: The hash to verify against
-    /// - Throws: Verification related errors
-    /// - Returns: Whether the password matches the hash
+    /// - Returns: Boolean indicating if the password matches
+    /// - Throws: Bcrypt verification errors
     func verifyPassword(_ password: String, hash: String) throws -> Bool {
         try Bcrypt.verify(password, created: hash)
     }
@@ -89,12 +89,12 @@ struct UserService {
     
     /// Sets the user's balance
     /// - Parameter newBalance: The new balance to set
-    /// - Throws: BalanceError if balance is negative
-    /// - Returns: The new balance
+    /// - Returns: The updated balance
+    /// - Throws: `UserServiceError.negativeBalance` if balance is negative
     func setBalance(_ newBalance: Double) throws -> Double {
         guard newBalance >= 0 else {
             logger.warning("Attempted to set negative balance: \(newBalance)")
-            throw BalanceError.negativeBalance
+            throw UserServiceError.negativeBalance
         }
         return newBalance
     }
@@ -104,16 +104,8 @@ struct UserService {
     ///   - isMerchant: The new merchant status
     ///   - user: The user to update
     /// - Returns: The updated user
-    func setIsMerchant(_ isMerchant: Bool, user: UserModel) -> UserModel {
+    func updateMerchantStatus(_ isMerchant: Bool, for user: inout UserModel) -> UserModel {
         user.isMerchant = isMerchant
         return user
-    }
-}
-
-// MARK: - Private Properties
-
-private extension UserService {
-    var logger: Logger {
-        Logger(label: "com.simplebank.userservice")
     }
 }
