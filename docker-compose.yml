@@ -1,3 +1,5 @@
+version: '3.8'
+
 # Docker Compose file for Vapor
 #
 # Install Docker on your system to run and test
@@ -32,10 +34,16 @@ services:
       context: .
     environment:
       <<: *shared_environment
+      DATABASE_PORT: 5432
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - '8080:8080'
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     # user: '0' # uncomment to run as root for testing purposes even though Dockerfile defines 'vapor' user.
     command: ["serve", "--env", "production", "--hostname", "0.0.0.0", "--port", "8080"]
   migrate:
@@ -59,9 +67,8 @@ services:
       - db
     command: ["migrate", "--revert", "--yes"]
     deploy:
-      replicas: 0
   db:
-    image: postgres:16-alpine
+    image: postgres:14
     volumes:
       - db_data:/var/lib/postgresql/data/pgdata
     environment:
@@ -71,3 +78,8 @@ services:
       POSTGRES_DB: vapor_database
     ports:
       - '5432:5432'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vapor_username -d vapor_database"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

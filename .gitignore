@@ -1,12 +1,23 @@
-Packages
+# Ignore macOS system files
+.DS_Store
+
+# Ignore build artifacts
 .build
+.swiftpm
 xcuserdata
 *.xcodeproj
 DerivedData/
-.DS_Store
-db.sqlite
-.swiftpm
+
+# Ignore environment files
 .env
 .env.*
-! .env.example
+!.env.example
+
+# Ignore package manager files
+Packages
+
+# Ignore database files
+db.sqlite
+
+# Ignore VSCode settings
 .vscode
