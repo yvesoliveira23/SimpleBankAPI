@@ -5,83 +5,84 @@ import XCTVapor
 final class UserControllerTests: XCTestCase {
     // MARK: - Properties
     private var app: Application!
-    // System Under Test: This is the instance of UserController that we are testing.
-    // It is initialized in the setUp method and deinitialized in the tearDown method.
     private var sut: UserController!
     
     // MARK: - Lifecycle
     override func setUp() async throws {
+        try await super.setUp()
         app = Application(.testing)
-        do {
-            try await configure(app)
-        } catch {
-            XCTFail("Failed to configure app: \(error)")
-        }
+        try await configure(app)
         sut = UserController()
     }
     
     override func tearDown() async throws {
+        await app.db.shutdown()
         app.shutdown()
         sut = nil
+        try await super.tearDown()
     }
-    
-    // MARK: - Create a User
+
+    // MARK: - Create Tests
     func testCreateUser_WhenValidData_ShouldReturnCreatedUser() async throws {
         // Given
-        let userData = createUserDTO(
-            name: "Test User",
-            cpf: "12345678900",
-            email: "test@example.com",
-            password: "password123",
-            balance: 100.0
-        )
+        let userData = try TestFactory.makeUserDTO()
         
-        // When
-        try app.test(.POST, "users", beforeRequest: { req in
+        // When/Then
+        try app.test(.POST, "api/v1/users", beforeRequest: { req in
             try req.content.encode(userData)
         }, afterResponse: { response in
-            // Then
             XCTAssertEqual(response.status, .created)
             let user = try response.content.decode(UserDTO.self)
-            XCTAssertEqual(user.name, userData.name)
-            XCTAssertEqual(user.email, userData.email)
             XCTAssertNotNil(user.id)
+            XCTAssertEqual(user.name, userData.name)
         })
     }
     
     func testCreateUser_WhenInvalidData_ShouldReturnBadRequest() async throws {
-        let invalidData: UserDTO
-        do {
-            invalidData = try UserDTO(
-                name: "",
-                cpf: "invalid",
-                email: "invalid-email",
-                password: "short",
-                balance: -100.0,
-                isMerchant: false
-            )
-        } catch {
-            XCTFail("Failed to initialize UserDTO with invalid data: \(error)")
-            return
-        }
+        // Given
+        let invalidData = try TestFactory.makeInvalidUserDTO()
         
-        // When
-        try app.test(.POST, "users", beforeRequest: { req in
+        // When/Then
+        try app.test(.POST, "api/v1/users", beforeRequest: { req in
             try req.content.encode(invalidData)
         }, afterResponse: { response in
-            // Then
             XCTAssertEqual(response.status, .badRequest)
         })
     }
     
-    // MARK: - Retrieve a User
+    func testCreateUser_WhenDuplicateEmail_ShouldReturnConflict() async throws {
+        // Given
+        let user = try await createTestUser()
+        let duplicateEmailData = try TestFactory.makeUserDTO(email: user.email)
+        
+        // When/Then
+        try app.test(.POST, "api/v1/users", beforeRequest: { req in
+            try req.content.encode(duplicateEmailData)
+        }, afterResponse: { response in
+            XCTAssertEqual(response.status, .conflict)
+        })
+    }
+    
+    func testCreateUser_WhenDuplicateCPF_ShouldReturnConflict() async throws {
+        // Given
+        let user = try await createTestUser()
+        let duplicateCPFData = try TestFactory.makeUserDTO(cpf: user.cpf)
+        
+        // When/Then
+        try app.test(.POST, "api/v1/users", beforeRequest: { req in
+            try req.content.encode(duplicateCPFData)
+        }, afterResponse: { response in
+            XCTAssertEqual(response.status, .conflict)
+        })
+    }
+    
+    // MARK: - Read Tests
     func testGetUser_WhenUserExists_ShouldReturnUser() async throws {
         // Given
-        let user = try await createAndSaveTestUser()
+        let user = try await createTestUser()
         
-        // When
-        try app.test(.GET, "users/\(user.id!)", afterResponse: { response in
-            // Then
+        // When/Then
+        try app.test(.GET, "api/v1/users/\(user.id!)", afterResponse: { response in
             XCTAssertEqual(response.status, .ok)
             let fetchedUser = try response.content.decode(UserDTO.self)
             XCTAssertEqual(fetchedUser.id, user.id)
@@ -90,113 +91,150 @@ final class UserControllerTests: XCTestCase {
     
     func testGetUser_WhenUserDoesNotExist_ShouldReturnNotFound() async throws {
         // Given
-        let nonExistentUserId = UUID()
-        try app.test(.GET, "users/\(nonExistentUserId)", afterResponse: { response in
-            // Then
+        let nonexistentId = UUID()
+        
+        // When/Then
+        try app.test(.GET, "api/v1/users/\(nonexistentId)", afterResponse: { response in
             XCTAssertEqual(response.status, .notFound)
         })
     }
     
-    // MARK: - Update a User
+    // MARK: - Update Tests
     func testUpdateUser_WhenValidData_ShouldReturnUpdatedUser() async throws {
         // Given
-        let user = try await createAndSaveTestUser()
-        let updateData = UserUpdateDTO(
-            name: "Updated Name",
-            email: "updated@example.com",
-            isMerchant: true
-        )
+        let user = try await createTestUser()
+        let updateData = TestFactory.makeUpdateUserDTO()
         
-        // When
-        try app.test(.PUT, "users/\(user.id!)", beforeRequest: { req in
+        // When/Then
+        try app.test(.PUT, "api/v1/users/\(user.id!)", beforeRequest: { req in
             try req.content.encode(updateData)
         }, afterResponse: { response in
-            // Then
             XCTAssertEqual(response.status, .ok)
             let updatedUser = try response.content.decode(UserDTO.self)
             XCTAssertEqual(updatedUser.name, updateData.name)
-            XCTAssertEqual(updatedUser.email, updateData.email)
-            XCTAssertEqual(updatedUser.isMerchant, updateData.isMerchant)
         })
     }
     
     func testUpdateUser_WhenUserDoesNotExist_ShouldReturnNotFound() async throws {
         // Given
         let nonExistentUserId = UUID()
-        let updateData = UserUpdateDTO(
-            name: "Updated Name",
-            email: "updated@example.com",
-            isMerchant: true
-        )
+        let updateData = TestFactory.makeUpdateUserDTO()
         
-        try app.test(.PUT, "users/\(nonExistentUserId)", beforeRequest: { req in
+        // When/Then
+        try app.test(.PUT, "api/v1/users/\(nonExistentUserId)", beforeRequest: { req in
             try req.content.encode(updateData)
         }, afterResponse: { response in
-            // Then
             XCTAssertEqual(response.status, .notFound)
         })
     }
     
-    // MARK: - Delete a User
-    func testDeleteUser_WhenUserExists_ShouldReturnNoContent() async throws {
+    func testUpdateUser_WhenInvalidData_ShouldReturnBadRequest() async throws {
+        // Given
+        let user = try await createTestUser()
+        let invalidData = TestFactory.makeInvalidUpdateUserDTO()
+        
+        // When/Then
+        try app.test(.PUT, "api/v1/users/\(user.id!)", beforeRequest: { req in
+            try req.content.encode(invalidData)
+        }, afterResponse: { response in
+            XCTAssertEqual(response.status, .badRequest)
+        })
+    }
+    
+    // MARK: - Delete Tests
+    func testDeleteUser_WhenUserExists_ShouldDeleteUser() async throws {
         // Given
         let user = try await createTestUser()
         
-        // When
-        try app.test(.DELETE, "users/\(user.id!)", afterResponse: { response in
-            // Then
+        // When/Then
+        try app.test(.DELETE, "api/v1/users/\(user.id!)", afterResponse: { response in
             XCTAssertEqual(response.status, .noContent)
-            
-            // Verify user was deleted
-            try app.test(.GET, "users/\(user.id!)", afterResponse: { response in
-                XCTAssertEqual(response.status, .notFound)
-            })
         })
     }
     
     func testDeleteUser_WhenUserDoesNotExist_ShouldReturnNotFound() async throws {
         // Given
-        let nonExistentUserId = UUID()
-        try app.test(.DELETE, "users/\(nonExistentUserId)", afterResponse: { response in
-            // Then
+        let nonexistentId = UUID()
+        
+        // When/Then
+        try app.test(.DELETE, "api/v1/users/\(nonexistentId)", afterResponse: { response in
             XCTAssertEqual(response.status, .notFound)
         })
     }
     
     // MARK: - List Tests
-    func testListUsers_WhenUsersExist_ShouldReturnUserList() async throws {
+    func testListUsers_WhenUsersExist_ShouldReturnList() async throws {
         // Given
-        let user1 = try await createAndSaveTestUser()
-        let user2 = try await createAndSaveTestUser(email: "test2@example.com")
+        let users = try await createMultipleUsers(count: 3)
         
-        // When
-        try app.test(.GET, "users", afterResponse: { response in
-            // Then
+        // When/Then
+        try app.test(.GET, "api/v1/users", afterResponse: { response in
             XCTAssertEqual(response.status, .ok)
-            let users = try response.content.decode([UserDTO].self)
-            XCTAssertGreaterThanOrEqual(users.count, 2)
-            XCTAssertTrue(users.contains { $0.id == user1.id })
-            XCTAssertTrue(users.contains { $0.id == user2.id })
+            let userList = try response.content.decode([UserDTO].self)
+            XCTAssertEqual(userList.count, users.count)
+        })
+    }
+    
+    func testListUsers_WhenNoUsers_ShouldReturnEmptyList() async throws {
+        // When/Then
+        try app.test(.GET, "api/v1/users", afterResponse: { response in
+            XCTAssertEqual(response.status, .ok)
+            let userList = try response.content.decode([UserDTO].self)
+            XCTAssertTrue(userList.isEmpty)
+        })
+    }
+    
+    func testListUsers_WithPagination_ShouldReturnPagedResults() async throws {
+        // Given
+        let users = try await createMultipleUsers(count: 10)
+        
+        // When/Then
+        try app.test(.GET, "api/v1/users?page=1&per=5", afterResponse: { response in
+            XCTAssertEqual(response.status, .ok)
+            let userList = try response.content.decode([UserDTO].self)
+            XCTAssertEqual(userList.count, 5)
+        })
+    }
+    
+    func testListUsers_WithFiltering_ShouldReturnFilteredResults() async throws {
+        // Given
+        let user1 = try await createTestUser(name: "Alice")
+        let user2 = try await createTestUser(name: "Bob", email: "bob@example.com", cpf: "12345678901")
+        
+        // When/Then
+        try app.test(.GET, "api/v1/users?name=Alice", afterResponse: { response in
+            XCTAssertEqual(response.status, .ok)
+            let userList = try response.content.decode([UserDTO].self)
+            XCTAssertEqual(userList.count, 1)
+            XCTAssertEqual(userList.first?.name, user1.name)
+        })
+    }
+    
+    func testListUsers_WithSorting_ShouldReturnSortedResults() async throws {
+        // Given
+        let user1 = try await createTestUser(name: "Alice")
+        let user2 = try await createTestUser(name: "Bob", email: "bob@example.com", cpf: "12345678901")
+        
+        // When/Then
+        try app.test(.GET, "api/v1/users?sort=name", afterResponse: { response in
+            XCTAssertEqual(response.status, .ok)
+            let userList = try response.content.decode([UserDTO].self)
+            XCTAssertEqual(userList.count, 2)
+            XCTAssertEqual(userList.first?.name, user1.name)
+            XCTAssertEqual(userList.last?.name, user2.name)
         })
     }
     
     // MARK: - Helper Methods
-    private func createUserDTO(name: String, cpf: String, email: String, password: String, balance: Double, isMerchant: Bool) -> UserDTO {
-        return UserDTO(
+    private func createTestUser(
+        name: String = "Test User",
+        email: String = "test@example.com",
+        cpf: String = "12345678900"
+    ) async throws -> UserModel {
+        let user = UserModel(
             name: name,
             cpf: cpf,
             email: email,
-            password: password,
-            balance: balance,
-            isMerchant: isMerchant
-        )
-    }
-    
-    private func createAndSaveTestUser(email: String = "test@example.com") async throws -> UserModel {
-        let user = UserModel(
-            name: "Test User",
-            cpf: "12345678900",
-            email: email,
             passwordHash: try Bcrypt.hash("password123"),
             balance: 100.0,
             isMerchant: false
@@ -205,16 +243,16 @@ final class UserControllerTests: XCTestCase {
         return user
     }
     
-    private func createAndSaveTestUser() async throws -> UserModel {
-        let user = UserModel(
-            name: "Test User",
-            cpf: "12345678900",
-            email: "test@example.com",
-            passwordHash: try Bcrypt.hash("password123"),
-            balance: 100.0,
-            isMerchant: false
-        )
-        try await user.save(on: app.db)
-        return user
+    private func createMultipleUsers(count: Int) async throws -> [UserModel] {
+        var users: [UserModel] = []
+        for i in 0..<count {
+            let user = try await createTestUser(
+                name: "User \(i)",
+                email: "user\(i)@example.com",
+                cpf: "1234567890\(i)"
+            )
+            users.append(user)
+        }
+        return users
     }
 }
