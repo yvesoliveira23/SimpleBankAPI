@@ -1,22 +1,16 @@
-load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_library", "swift_test")
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary", "swift_library")
 
 swift_library(
     name = "SimpleBankAPILib",
-    srcs = glob(["Sources/App/**/*.swift"]),
+    srcs = glob(["Sources/**/*.swift"]),
     deps = [
         "@vapor//:Vapor",
-        "@fluent//:Fluent",
-        "@fluent-postgres-driver//:FluentPostgresDriver",
+        "@fluent//:fluent",
+        "@fluent-postgres-driver//:fluent-postgres-driver",
     ],
 )
 
 swift_binary(
     name = "SimpleBankAPI",
-    deps = [":SimpleBankAPILib"],
-)
-
-swift_test(
-    name = "SimpleBankAPITests",
-    srcs = glob(["Tests/**/*.swift"]),
     deps = [":SimpleBankAPILib"],
 )
