@@ -47,6 +47,13 @@ git_repository(
     build_file = "//:fluent-postgres-driver.BUILD",
 )
 
+git_repository(
+    name = "swift-nio",
+    remote = "https://github.com/apple/swift-nio.git",
+    tag = "2.62.0",
+    build_file = "//:nio.BUILD",
+)
+
 load(
     "@build_bazel_rules_swift//swift:extras.bzl",
     "swift_rules_extra_dependencies",

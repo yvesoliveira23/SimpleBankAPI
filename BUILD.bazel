@@ -7,6 +7,9 @@ swift_library(
         "@vapor//:Vapor",
         "@fluent//:fluent",
         "@fluent-postgres-driver//:fluent-postgres-driver",
+        "@swift-nio//:NIOCore",
+        "@swift-nio//:NIO",
+        "@swift-nio//:NIOConcurrencyHelpers",
     ],
 )
 
